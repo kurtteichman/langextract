@@ -524,6 +524,8 @@ def _build_visualization_html_modified(
     color_map: dict[str, str],
     animation_speed: float = 1.0,
     show_legend: bool = True,
+    thumbs_up_url: str = '',
+    thumbs_down_url: str = ''
 ) -> str:
   """Builds the complete visualization HTML."""
   if not extractions:
@@ -569,6 +571,37 @@ def _build_visualization_html_modified(
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
+      </div>
+      <table width="400" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border: none; margin: 0 auto;">
+  <tr>
+    <td colspan="2" 
+        style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 8px 0;">
+      How did we do?
+    </td>
+  </tr>
+
+  <tr>
+    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
+      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none;">👍</a>
+    </td>
+    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
+      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none;">👎</a>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
+      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none; color: inherit;">
+        Thumbs up
+      </a>
+    </td>
+    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
+      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none; color: inherit;">
+        Thumbs down
+      </a>
+    </td>
+  </tr>
+</table>
     </div>""")
 
   return html_content
@@ -717,6 +750,8 @@ def visualize_modified(
     animation_speed: float = 1.0,
     show_legend: bool = True,
     gif_optimized: bool = True,
+    thumbs_up_url: str = '',
+    thumbs_down_url: str = ''
 ) -> HTML | str:
   """Visualises extraction data as animated highlighted HTML.
 
@@ -773,6 +808,8 @@ def visualize_modified(
       color_map,
       animation_speed,
       show_legend,
+      thumbs_up_url,
+      thumbs_down_url
   )
 
   full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
