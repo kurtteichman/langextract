@@ -130,6 +130,7 @@ _VISUALIZATION_CSS_MODIFIED = textwrap.dedent("""\
     .lx-text-window {
       font-family: monospace; white-space: pre-wrap; border: 1px solid #90caf9;
       padding: 12px; 
+      white-space: pre-wrap;
       /*max-height: 260px; overflow-y: auto; */ 
       margin-bottom: 12px;
       line-height: 1.6;
