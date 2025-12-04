@@ -130,7 +130,6 @@ _VISUALIZATION_CSS_MODIFIED = textwrap.dedent("""\
     .lx-text-window {
       font-family: monospace; white-space: pre-wrap; border: 1px solid #90caf9;
       padding: 12px; 
-      white-space: pre-wrap;
       /*max-height: 260px; overflow-y: auto; */ 
       margin-bottom: 12px;
       line-height: 1.6;
@@ -563,6 +562,10 @@ def _build_visualization_html_modified(
       and first_extraction.char_interval.end_pos is not None
   ), 'first extraction must have valid char_interval with start_pos and end_pos'
   pos_info_str = f'[{first_extraction.char_interval.start_pos}-{first_extraction.char_interval.end_pos}]'
+
+  # test modification for whitespace
+  #print(highlighted_text)
+  highlighted_text = highlighted_text.replace('\n','<br/>')
 
   html_content = textwrap.dedent(f"""
     <div class="lx-animated-wrapper">
