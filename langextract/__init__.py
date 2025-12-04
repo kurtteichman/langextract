@@ -31,6 +31,7 @@ __all__ = [
     # Public convenience functions (thin wrappers)
     "extract",
     "visualize",
+    "visualize_modified",
     # Submodules exposed lazily on attribute access for ergonomics:
     "annotation",
     "data",
@@ -54,6 +55,9 @@ def extract(*args: Any, **kwargs: Any):
   """Top-level API: lx.extract(...)."""
   return extract_func(*args, **kwargs)
 
+def visualize_modified(*args: Any, **kwargs: Any):
+  """Top-level API: lx.visualize(...)."""
+  return visualization.visualize_modified(*args, **kwargs)
 
 def visualize(*args: Any, **kwargs: Any):
   """Top-level API: lx.visualize(...)."""

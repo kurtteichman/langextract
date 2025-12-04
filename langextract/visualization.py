@@ -72,6 +72,111 @@ _PALETTE: list[str] = [
     '#E8EAED',  # Very Light Grey (Neutral Highlight)
     '#DDE8E8',  # Pale Cyan (Cyan Container)
 ]
+_VISUALIZATION_CSS_MODIFIED = textwrap.dedent("""\
+    <style>
+    .lx-highlight { position: relative; border-radius:3px; padding:1px 2px;}
+    .lx-highlight .lx-tooltip {
+      visibility: hidden;
+      opacity: 0;
+      transition: opacity 0.2s ease-in-out;
+      background: #333;
+      color: #fff;
+      text-align: left;
+      border-radius: 4px;
+      padding: 6px 8px;
+      position: absolute;
+      z-index: 1000;
+      bottom: 125%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      max-width: 240px;
+      white-space: normal;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    .lx-highlight:hover .lx-tooltip { visibility: visible; opacity:1; }
+    .lx-animated-wrapper { max-width: 100%; font-family: Arial, sans-serif; }
+    .lx-controls {
+      background: #fafafa; border: 1px solid #90caf9; border-radius: 8px;
+      padding: 12px; margin-bottom: 16px;
+    }
+    .lx-button-row {
+      display: flex; justify-content: center; gap: 8px; margin-bottom: 12px;
+    }
+    .lx-control-btn {
+      background: #4285f4; color: white; border: none; border-radius: 4px;
+      padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: background-color 0.2s;
+    }
+    .lx-control-btn:hover { background: #3367d6; }
+    .lx-progress-container {
+      margin-bottom: 8px;
+    }
+    .lx-progress-slider {
+      width: 100%; margin: 0; appearance: none; height: 6px;
+      background: #ddd; border-radius: 3px; outline: none;
+    }
+    .lx-progress-slider::-webkit-slider-thumb {
+      appearance: none; width: 18px; height: 18px; background: #4285f4;
+      border-radius: 50%; cursor: pointer;
+    }
+    .lx-progress-slider::-moz-range-thumb {
+      width: 18px; height: 18px; background: #4285f4; border-radius: 50%;
+      cursor: pointer; border: none;
+    }
+    .lx-status-text {
+      text-align: center; font-size: 12px; color: #666; margin-top: 4px;
+    }
+    .lx-text-window {
+      font-family: monospace; white-space: pre-wrap; border: 1px solid #90caf9;
+      padding: 12px; 
+      /*max-height: 260px; overflow-y: auto; */ 
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .lx-attributes-panel {
+      background: #fafafa; border: 1px solid #90caf9; border-radius: 6px;
+      padding: 8px 10px; margin-top: 8px; font-size: 13px;
+    }
+    /*
+    .lx-current-highlight {
+      border-bottom: 4px solid #ff4444;
+      font-weight: bold;
+      animation: lx-pulse 1s ease-in-out;
+    }
+    */
+    @keyframes lx-pulse {
+      0% { text-decoration-color: #ff4444; }
+      50% { text-decoration-color: #ff0000; }
+      100% { text-decoration-color: #ff4444; }
+    }
+    .lx-legend {
+      font-size: 12px; margin-bottom: 8px;
+      padding-bottom: 8px; border-bottom: 1px solid #e0e0e0;
+    }
+    .lx-label {
+      display: inline-block;
+      padding: 2px 4px;
+      border-radius: 3px;
+      margin-right: 4px;
+      color: #000;
+    }
+    .lx-attr-key {
+      font-weight: 600;
+      color: #1565c0;
+      letter-spacing: 0.3px;
+    }
+    .lx-attr-value {
+      font-weight: 400;
+      opacity: 0.85;
+      letter-spacing: 0.2px;
+    }
+
+    /* Add optimizations with larger fonts and better readability for GIFs */
+    .lx-gif-optimized .lx-text-window { font-size: 16px; line-height: 1.8; }
+    .lx-gif-optimized .lx-attributes-panel { font-size: 15px; }
+    .lx-gif-optimized .lx-current-highlight { text-decoration-thickness: 4px; }
+    </style>""")
 
 _VISUALIZATION_CSS = textwrap.dedent("""\
     <style>
@@ -413,6 +518,62 @@ def _prepare_extraction_data(
 
   return extraction_data
 
+def _build_visualization_html_modified(
+    text: str,
+    extractions: list[data.Extraction],
+    color_map: dict[str, str],
+    animation_speed: float = 1.0,
+    show_legend: bool = True,
+) -> str:
+  """Builds the complete visualization HTML."""
+  if not extractions:
+    return (
+        '<div class="lx-animated-wrapper"><p>No extractions to'
+        ' animate.</p></div>'
+    )
+
+  # Sort extractions by position for proper HTML nesting.
+  def _extraction_sort_key(extraction):
+    """Sort by position, then by span length descending for proper nesting."""
+    start = extraction.char_interval.start_pos
+    end = extraction.char_interval.end_pos
+    span_length = end - start
+    return (start, -span_length)  # longer spans first
+
+  sorted_extractions = sorted(extractions, key=_extraction_sort_key)
+
+  highlighted_text = _build_highlighted_text(
+      text, sorted_extractions, color_map
+  )
+  extraction_data = _prepare_extraction_data(
+      text, sorted_extractions, color_map
+  )
+  legend_html = _build_legend_html(color_map) if show_legend else ''
+
+  js_data = json.dumps(extraction_data)
+
+  # Prepare pos_info_str safely for pytype for the f-string below
+  first_extraction = extractions[0]
+  assert (
+      first_extraction.char_interval
+      and first_extraction.char_interval.start_pos is not None
+      and first_extraction.char_interval.end_pos is not None
+  ), 'first extraction must have valid char_interval with start_pos and end_pos'
+  pos_info_str = f'[{first_extraction.char_interval.start_pos}-{first_extraction.char_interval.end_pos}]'
+
+  html_content = textwrap.dedent(f"""
+    <div class="lx-animated-wrapper">
+      <div class="lx-attributes-panel">
+        {legend_html}
+      </div>
+      <div class="lx-text-window" id="textWindow">
+        {highlighted_text}
+      </div>
+    </div>""")
+
+  return html_content
+
+
 
 def _build_visualization_html(
     text: str,
@@ -550,6 +711,82 @@ def _build_visualization_html(
 
   return html_content
 
+def visualize_modified(
+    data_source: data.AnnotatedDocument | str | pathlib.Path,
+    *,
+    animation_speed: float = 1.0,
+    show_legend: bool = True,
+    gif_optimized: bool = True,
+) -> HTML | str:
+  """Visualises extraction data as animated highlighted HTML.
+
+  Args:
+    data_source: Either an AnnotatedDocument or path to a JSONL file.
+    animation_speed: Animation speed in seconds between extractions.
+    show_legend: If ``True``, appends a colour legend mapping extraction classes
+      to colours.
+    gif_optimized: If ``True``, applies GIF-optimized styling with larger fonts,
+      better contrast, and improved dimensions for video capture.
+
+  Returns:
+    An :class:`IPython.display.HTML` object if IPython is available, otherwise
+    the generated HTML string.
+  """
+  # Load document if it's a file path
+  if isinstance(data_source, (str, pathlib.Path)):
+    file_path = pathlib.Path(data_source)
+    if not file_path.exists():
+      raise FileNotFoundError(f'JSONL file not found: {file_path}')
+
+    documents = list(io.load_annotated_documents_jsonl(file_path))
+    if not documents:
+      raise ValueError(f'No documents found in JSONL file: {file_path}')
+
+    annotated_doc = documents[0]  # Use first document
+  else:
+    annotated_doc = data_source
+
+  if not annotated_doc or annotated_doc.text is None:
+    raise ValueError('annotated_doc must contain text to visualise.')
+
+  if annotated_doc.extractions is None:
+    raise ValueError('annotated_doc must contain extractions to visualise.')
+
+  # Filter valid extractions - show ALL of them
+  valid_extractions = _filter_valid_extractions(annotated_doc.extractions)
+
+  if not valid_extractions:
+    empty_html = (
+        '<div class="lx-animated-wrapper"><p>No valid extractions to'
+        ' animate.</p></div>'
+    )
+    full_html = _VISUALIZATION_CSS_MODIFIED + empty_html
+    if HTML is not None and _is_jupyter():
+      return HTML(full_html)
+    return full_html
+
+  color_map = _assign_colors(valid_extractions)
+
+  visualization_html = _build_visualization_html_modified(
+      annotated_doc.text,
+      valid_extractions,
+      color_map,
+      animation_speed,
+      show_legend,
+  )
+
+  full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
+
+  # Apply GIF optimizations if requested
+  if gif_optimized:
+    full_html = full_html.replace(
+        'class="lx-animated-wrapper"',
+        'class="lx-animated-wrapper lx-gif-optimized"',
+    )
+
+  if HTML is not None and _is_jupyter():
+    return HTML(full_html)
+  return full_html
 
 def visualize(
     data_source: data.AnnotatedDocument | str | pathlib.Path,
@@ -572,6 +809,7 @@ def visualize(
     An :class:`IPython.display.HTML` object if IPython is available, otherwise
     the generated HTML string.
   """
+  #print("IM IN HERE")
   # Load document if it's a file path
   if isinstance(data_source, (str, pathlib.Path)):
     file_path = pathlib.Path(data_source)
