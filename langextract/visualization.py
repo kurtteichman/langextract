@@ -611,6 +611,168 @@ def _build_visualization_html_modified(
   return html_content
 
 
+def _build_highlighted_text_with_tags(
+    text: str,
+    extractions: list[data.Extraction],
+    color_map: dict[str, str],
+    tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
+    tag_separator: str = ' / ',
+) -> str:
+  """Like ``_build_highlighted_text`` but each highlighted span carries an
+  inline ``<sup>`` tag built from the listed attribute keys joined by
+  ``tag_separator`` (e.g. ``LEFT_PCOMM / GROWING``). The wrapping ``<span>``
+  also gets a matching ``title=`` attribute for hover tooltips. Missing
+  attribute values render as ``?`` so the tag shape is consistent.
+
+  Inline styles are applied to the ``<sup>`` so the rendering survives email
+  clients that strip ``<style>`` blocks.
+  """
+  points = []
+  span_lengths = {}
+  for index, extraction in enumerate(extractions):
+    if (
+        not extraction.char_interval
+        or extraction.char_interval.start_pos is None
+        or extraction.char_interval.end_pos is None
+        or extraction.char_interval.start_pos
+        >= extraction.char_interval.end_pos
+    ):
+      continue
+
+    start_pos = extraction.char_interval.start_pos
+    end_pos = extraction.char_interval.end_pos
+    points.append(SpanPoint(start_pos, TagType.START, index, extraction))
+    points.append(SpanPoint(end_pos, TagType.END, index, extraction))
+    span_lengths[index] = end_pos - start_pos
+
+  def sort_key(point: SpanPoint):
+    span_length = span_lengths.get(point.span_idx, 0)
+    if point.tag_type == TagType.END:
+      return (point.position, 0, span_length)
+    else:
+      return (point.position, 1, -span_length)
+
+  points.sort(key=sort_key)
+
+  def _tag_for(extraction: data.Extraction) -> str:
+    attrs = extraction.attributes or {}
+    return tag_separator.join(str(attrs.get(k, '?')) for k in tag_attributes)
+
+  sup_style = (
+      'font-size:0.75em;font-family:monospace;color:#555;'
+      'padding:0 3px;margin-left:4px;background:rgba(0,0,0,0.06);'
+      'border-radius:3px;'
+  )
+
+  html_parts: list[str] = []
+  cursor = 0
+  for point in points:
+    if point.position > cursor:
+      html_parts.append(html.escape(text[cursor : point.position]))
+
+    if point.tag_type == TagType.START:
+      colour = color_map.get(point.extraction.extraction_class, '#ffff8d')
+      highlight_class = ' lx-current-highlight' if point.span_idx == 0 else ''
+      tag = _tag_for(point.extraction)
+      span_html = (
+          f'<span class="lx-highlight{highlight_class}"'
+          f' data-idx="{point.span_idx}"'
+          f' title="{html.escape(tag)}"'
+          f' style="background-color:{colour};">'
+      )
+      html_parts.append(span_html)
+    else:
+      # Emit the <sup> tag for the closing extraction before </span>, so the
+      # tag is visually attached to the highlighted text.
+      tag = _tag_for(point.extraction)
+      html_parts.append(
+          f'<sup class="lx-tag" style="{sup_style}">'
+          f'{html.escape(tag)}</sup></span>'
+      )
+
+    cursor = point.position
+
+  if cursor < len(text):
+    html_parts.append(html.escape(text[cursor:]))
+  return ''.join(html_parts)
+
+
+def _build_visualization_html_modified_with_tags(
+    text: str,
+    extractions: list[data.Extraction],
+    color_map: dict[str, str],
+    animation_speed: float = 1.0,
+    show_legend: bool = True,
+    thumbs_up_url: str = '',
+    thumbs_down_url: str = '',
+    tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
+    tag_separator: str = ' / ',
+) -> str:
+  """Same shell as ``_build_visualization_html_modified`` but uses the
+  tag-aware highlighter."""
+  if not extractions:
+    return (
+        '<div class="lx-animated-wrapper"><p>No extractions to'
+        ' animate.</p></div>'
+    )
+
+  def _extraction_sort_key(extraction):
+    start = extraction.char_interval.start_pos
+    end = extraction.char_interval.end_pos
+    span_length = end - start
+    return (start, -span_length)
+
+  sorted_extractions = sorted(extractions, key=_extraction_sort_key)
+
+  highlighted_text = _build_highlighted_text_with_tags(
+      text, sorted_extractions, color_map, tag_attributes, tag_separator
+  )
+  legend_html = _build_legend_html(color_map) if show_legend else ''
+  highlighted_text = highlighted_text.replace('\n', '<br/>')
+
+  html_content = textwrap.dedent(f"""
+    <div class="lx-animated-wrapper">
+      <div class="lx-attributes-panel">
+        {legend_html}
+      </div>
+      <div class="lx-text-window" id="textWindow">
+        {highlighted_text}
+      </div>
+      </div>
+      <table width="400" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border: none; margin: 0 auto;">
+  <tr>
+    <td colspan="2"
+        style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 8px 0;">
+      How did we do?
+    </td>
+  </tr>
+
+  <tr>
+    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
+      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none;">👍</a>
+    </td>
+    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
+      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none;">👎</a>
+    </td>
+  </tr>
+
+  <tr>
+    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
+      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none; color: inherit;">
+        Thumbs up
+      </a>
+    </td>
+    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
+      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none; color: inherit;">
+        Thumbs down
+      </a>
+    </td>
+  </tr>
+</table>
+    </div>""")
+
+  return html_content
+
 
 def _build_visualization_html(
     text: str,
@@ -828,6 +990,90 @@ def visualize_modified(
   if HTML is not None and _is_jupyter():
     return HTML(full_html)
   return full_html
+
+
+def visualize_modified_with_tags(
+    data_source: data.AnnotatedDocument | str | pathlib.Path,
+    *,
+    animation_speed: float = 1.0,
+    show_legend: bool = True,
+    gif_optimized: bool = True,
+    thumbs_up_url: str = '',
+    thumbs_down_url: str = '',
+    tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
+    tag_separator: str = ' / ',
+) -> HTML | str:
+  """Like :func:`visualize_modified` but each highlighted span carries an
+  inline ``<sup>`` tag derived from selected extraction attributes.
+
+  By default the tag joins ``location`` and ``growth_status`` with `` / `` —
+  intended for structured aneurysm NER output like
+  ``LEFT_PCOMM / GROWING``. Pass ``tag_attributes=()`` to disable the tag
+  text (the highlights remain). Missing attributes render as ``?``.
+
+  Args:
+    data_source: ``AnnotatedDocument`` or path to a JSONL file.
+    animation_speed: Animation speed in seconds between extractions.
+    show_legend: Append a legend mapping extraction_class to colour.
+    gif_optimized: Apply the GIF-friendly larger-font styling tweak.
+    thumbs_up_url / thumbs_down_url: Feedback links rendered below the text.
+    tag_attributes: Attribute keys whose values build the inline tag.
+    tag_separator: String used to join the attribute values.
+  """
+  if isinstance(data_source, (str, pathlib.Path)):
+    file_path = pathlib.Path(data_source)
+    if not file_path.exists():
+      raise FileNotFoundError(f'JSONL file not found: {file_path}')
+    documents = list(io.load_annotated_documents_jsonl(file_path))
+    if not documents:
+      raise ValueError(f'No documents found in JSONL file: {file_path}')
+    annotated_doc = documents[0]
+  else:
+    annotated_doc = data_source
+
+  if not annotated_doc or annotated_doc.text is None:
+    raise ValueError('annotated_doc must contain text to visualise.')
+  if annotated_doc.extractions is None:
+    raise ValueError('annotated_doc must contain extractions to visualise.')
+
+  valid_extractions = _filter_valid_extractions(annotated_doc.extractions)
+
+  if not valid_extractions:
+    empty_html = (
+        '<div class="lx-animated-wrapper"><p>No valid extractions to'
+        ' animate.</p></div>'
+    )
+    full_html = _VISUALIZATION_CSS_MODIFIED + empty_html
+    if HTML is not None and _is_jupyter():
+      return HTML(full_html)
+    return full_html
+
+  color_map = _assign_colors(valid_extractions)
+
+  visualization_html = _build_visualization_html_modified_with_tags(
+      annotated_doc.text,
+      valid_extractions,
+      color_map,
+      animation_speed,
+      show_legend,
+      thumbs_up_url,
+      thumbs_down_url,
+      tag_attributes,
+      tag_separator,
+  )
+
+  full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
+
+  if gif_optimized:
+    full_html = full_html.replace(
+        'class="lx-animated-wrapper"',
+        'class="lx-animated-wrapper lx-gif-optimized"',
+    )
+
+  if HTML is not None and _is_jupyter():
+    return HTML(full_html)
+  return full_html
+
 
 def visualize(
     data_source: data.AnnotatedDocument | str | pathlib.Path,

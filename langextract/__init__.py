@@ -32,6 +32,7 @@ __all__ = [
     "extract",
     "visualize",
     "visualize_modified",
+    "visualize_modified_with_tags",
     # Submodules exposed lazily on attribute access for ergonomics:
     "annotation",
     "data",
@@ -58,6 +59,10 @@ def extract(*args: Any, **kwargs: Any):
 def visualize_modified(*args: Any, **kwargs: Any):
   """Top-level API: lx.visualize(...)."""
   return visualization.visualize_modified(*args, **kwargs)
+
+def visualize_modified_with_tags(*args: Any, **kwargs: Any):
+  """Top-level API: lx.visualize_modified_with_tags(...)."""
+  return visualization.visualize_modified_with_tags(*args, **kwargs)
 
 def visualize(*args: Any, **kwargs: Any):
   """Top-level API: lx.visualize(...)."""
