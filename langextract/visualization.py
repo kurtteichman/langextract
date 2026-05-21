@@ -128,14 +128,14 @@ _VISUALIZATION_CSS_MODIFIED = textwrap.dedent("""\
       text-align: center; font-size: 12px; color: #666; margin-top: 4px;
     }
     .lx-text-window {
-      font-family: monospace; white-space: pre-wrap; border: 1px solid #90caf9;
-      padding: 12px; 
-      /*max-height: 260px; overflow-y: auto; */ 
+      font-family: monospace; white-space: pre-wrap; border: none;
+      padding: 12px;
+      /*max-height: 260px; overflow-y: auto; */
       margin-bottom: 12px;
       line-height: 1.6;
     }
     .lx-attributes-panel {
-      background: #fafafa; border: 1px solid #90caf9; border-radius: 6px;
+      background: #fafafa; border: none; border-radius: 6px;
       padding: 8px 10px; margin-top: 8px; font-size: 13px;
     }
     /*
@@ -234,12 +234,12 @@ _VISUALIZATION_CSS = textwrap.dedent("""\
       text-align: center; font-size: 12px; color: #666; margin-top: 4px;
     }
     .lx-text-window {
-      font-family: monospace; white-space: pre-wrap; border: 1px solid #90caf9;
+      font-family: monospace; white-space: pre-wrap; border: none;
       padding: 12px; max-height: 260px; overflow-y: auto; margin-bottom: 12px;
       line-height: 1.6;
     }
     .lx-attributes-panel {
-      background: #fafafa; border: 1px solid #90caf9; border-radius: 6px;
+      background: #fafafa; border: none; border-radius: 6px;
       padding: 8px 10px; margin-top: 8px; font-size: 13px;
     }
     .lx-current-highlight {
@@ -524,8 +524,6 @@ def _build_visualization_html_modified(
     color_map: dict[str, str],
     animation_speed: float = 1.0,
     show_legend: bool = True,
-    thumbs_up_url: str = '',
-    thumbs_down_url: str = ''
 ) -> str:
   """Builds the complete visualization HTML."""
   if not extractions:
@@ -563,9 +561,7 @@ def _build_visualization_html_modified(
   ), 'first extraction must have valid char_interval with start_pos and end_pos'
   pos_info_str = f'[{first_extraction.char_interval.start_pos}-{first_extraction.char_interval.end_pos}]'
 
-  # test modification for whitespace
-  #print(highlighted_text)
-  highlighted_text = highlighted_text.replace('\n','<br/>')
+  highlighted_text = highlighted_text.replace('\n', '<br/>')
 
   html_content = textwrap.dedent(f"""
     <div class="lx-animated-wrapper">
@@ -575,37 +571,6 @@ def _build_visualization_html_modified(
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
-      </div>
-      <table width="400" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border: none; margin: 0 auto;">
-  <tr>
-    <td colspan="2" 
-        style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 8px 0;">
-      How did we do?
-    </td>
-  </tr>
-
-  <tr>
-    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
-      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none;">👍</a>
-    </td>
-    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
-      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none;">👎</a>
-    </td>
-  </tr>
-
-  <tr>
-    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
-      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none; color: inherit;">
-        Thumbs up
-      </a>
-    </td>
-    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
-      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none; color: inherit;">
-        Thumbs down
-      </a>
-    </td>
-  </tr>
-</table>
     </div>""")
 
   return html_content
@@ -703,8 +668,6 @@ def _build_visualization_html_modified_with_tags(
     color_map: dict[str, str],
     animation_speed: float = 1.0,
     show_legend: bool = True,
-    thumbs_up_url: str = '',
-    thumbs_down_url: str = '',
     tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
     tag_separator: str = ' / ',
 ) -> str:
@@ -738,37 +701,6 @@ def _build_visualization_html_modified_with_tags(
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
-      </div>
-      <table width="400" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border: none; margin: 0 auto;">
-  <tr>
-    <td colspan="2"
-        style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 8px 0;">
-      How did we do?
-    </td>
-  </tr>
-
-  <tr>
-    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
-      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none;">👍</a>
-    </td>
-    <td style="width: 50%; text-align: center; border: none; font-size: 40px; padding: 10px 0;">
-      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none;">👎</a>
-    </td>
-  </tr>
-
-  <tr>
-    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
-      <a href="{thumbs_up_url}" target="_blank" style="text-decoration: none; color: inherit;">
-        Thumbs up
-      </a>
-    </td>
-    <td style="text-align: center; border: none; font-family: Arial, sans-serif; padding: 4px 0;">
-      <a href="{thumbs_down_url}" target="_blank" style="text-decoration: none; color: inherit;">
-        Thumbs down
-      </a>
-    </td>
-  </tr>
-</table>
     </div>""")
 
   return html_content
@@ -916,8 +848,7 @@ def visualize_modified(
     animation_speed: float = 1.0,
     show_legend: bool = True,
     gif_optimized: bool = True,
-    thumbs_up_url: str = '',
-    thumbs_down_url: str = ''
+    **_ignored,
 ) -> HTML | str:
   """Visualises extraction data as animated highlighted HTML.
 
@@ -974,8 +905,6 @@ def visualize_modified(
       color_map,
       animation_speed,
       show_legend,
-      thumbs_up_url,
-      thumbs_down_url
   )
 
   full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
@@ -998,10 +927,9 @@ def visualize_modified_with_tags(
     animation_speed: float = 1.0,
     show_legend: bool = True,
     gif_optimized: bool = True,
-    thumbs_up_url: str = '',
-    thumbs_down_url: str = '',
     tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
     tag_separator: str = ' / ',
+    **_ignored,
 ) -> HTML | str:
   """Like :func:`visualize_modified` but each highlighted span carries an
   inline ``<sup>`` tag derived from selected extraction attributes.
@@ -1016,7 +944,6 @@ def visualize_modified_with_tags(
     animation_speed: Animation speed in seconds between extractions.
     show_legend: Append a legend mapping extraction_class to colour.
     gif_optimized: Apply the GIF-friendly larger-font styling tweak.
-    thumbs_up_url / thumbs_down_url: Feedback links rendered below the text.
     tag_attributes: Attribute keys whose values build the inline tag.
     tag_separator: String used to join the attribute values.
   """
@@ -1056,8 +983,6 @@ def visualize_modified_with_tags(
       color_map,
       animation_speed,
       show_legend,
-      thumbs_up_url,
-      thumbs_down_url,
       tag_attributes,
       tag_separator,
   )
