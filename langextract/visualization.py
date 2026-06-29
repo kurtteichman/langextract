@@ -337,10 +337,59 @@ class SpanPoint:
   extraction: data.Extraction
 
 
+def _link_open_tag(link_url: str | None) -> str:
+  """Returns the opening ``<a>`` tag wrapping a highlight, or '' when no URL."""
+  if not link_url:
+    return ''
+  return (
+      f'<a href="{html.escape(link_url, quote=True)}" target="_blank"'
+      f' rel="noopener" style="text-decoration:none;color:inherit;">'
+  )
+
+
+def _link_footer_html(link_url: str | None, link_label: str | None) -> str:
+  """Returns a labelled link block for the bottom of the email, or '' when no
+  URL. Label defaults to the URL itself."""
+  if not link_url:
+    return ''
+  label = link_label or link_url
+  return (
+      f'<div class="lx-email-link" style="margin-top:12px;font-size:13px;">'
+      f'<a href="{html.escape(link_url, quote=True)}" target="_blank"'
+      f' rel="noopener">{html.escape(label)}</a></div>'
+  )
+
+
+def _wrap_text(s: str, col: int, width: int | None) -> tuple[str, int]:
+  """Soft-wraps raw text for display. Inserts a newline after the first space at
+  or past column ``width`` so visible lines stay near ``width`` without splitting
+  words. ``col`` is the running column carried over from earlier chunks on the
+  same line (highlights span multiple chunks); returns the wrapped text and the
+  new running column. Source newlines reset the column. No-op when ``width`` is
+  falsy. Must run on the RAW text (before HTML-escaping) so column counting and
+  break points never land inside a tag or an entity.
+  """
+  if not width:
+    return s, col
+  out: list[str] = []
+  for ch in s:
+    out.append(ch)
+    if ch == '\n':
+      col = 0
+    else:
+      col += 1
+      if col >= width and ch == ' ':
+        out.append('\n')
+        col = 0
+  return ''.join(out), col
+
+
 def _build_highlighted_text(
     text: str,
     extractions: list[data.Extraction],
     color_map: dict[str, str],
+    link_url: str | None = None,
+    wrap_width: int | None = None,
 ) -> str:
   """Returns text with <span> highlights inserted, supporting nesting.
 
@@ -348,7 +397,15 @@ def _build_highlighted_text(
     text: Original document text.
     extractions: List of extraction objects with char_intervals.
     color_map: Mapping of extraction_class to colour.
+    link_url: If set, each top-level highlighted region is wrapped in an
+      ``<a href=link_url>``. Nested highlights stay plain ``<span>``s so no
+      invalid nested anchors are produced.
+    wrap_width: If set, soft-wrap the report text at this column (see
+      ``_wrap_text``); injected markup (spans/sup/links) is never counted.
   """
+  link_open = _link_open_tag(link_url)
+  depth = 0
+  col = 0
   points = []
   span_lengths = {}
   for index, extraction in enumerate(extractions):
@@ -395,7 +452,8 @@ def _build_highlighted_text(
   cursor = 0
   for point in points:
     if point.position > cursor:
-      html_parts.append(html.escape(text[cursor : point.position]))
+      chunk, col = _wrap_text(text[cursor : point.position], col, wrap_width)
+      html_parts.append(html.escape(chunk))
 
     if point.tag_type == TagType.START:
       colour = color_map.get(point.extraction.extraction_class, '#ffff8d')
@@ -405,14 +463,21 @@ def _build_highlighted_text(
           f'<span class="lx-highlight{highlight_class}"'
           f' data-idx="{point.span_idx}" style="background-color:{colour};">'
       )
+      if link_open and depth == 0:
+        html_parts.append(link_open)
       html_parts.append(span_html)
+      depth += 1
     else:  # point.tag_type == TagType.END
       html_parts.append('</span>')
+      depth -= 1
+      if link_open and depth == 0:
+        html_parts.append('</a>')
 
     cursor = point.position
 
   if cursor < len(text):
-    html_parts.append(html.escape(text[cursor:]))
+    chunk, col = _wrap_text(text[cursor:], col, wrap_width)
+    html_parts.append(html.escape(chunk))
   return ''.join(html_parts)
 
 
@@ -524,6 +589,9 @@ def _build_visualization_html_modified(
     color_map: dict[str, str],
     animation_speed: float = 1.0,
     show_legend: bool = True,
+    link_url: str | None = None,
+    link_label: str | None = None,
+    wrap_width: int | None = None,
 ) -> str:
   """Builds the complete visualization HTML."""
   if not extractions:
@@ -543,12 +611,13 @@ def _build_visualization_html_modified(
   sorted_extractions = sorted(extractions, key=_extraction_sort_key)
 
   highlighted_text = _build_highlighted_text(
-      text, sorted_extractions, color_map
+      text, sorted_extractions, color_map, link_url, wrap_width
   )
   extraction_data = _prepare_extraction_data(
       text, sorted_extractions, color_map
   )
   legend_html = _build_legend_html(color_map) if show_legend else ''
+  link_footer = _link_footer_html(link_url, link_label)
 
   js_data = json.dumps(extraction_data)
 
@@ -571,6 +640,7 @@ def _build_visualization_html_modified(
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
+      {link_footer}
     </div>""")
 
   return html_content
@@ -582,6 +652,8 @@ def _build_highlighted_text_with_tags(
     color_map: dict[str, str],
     tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
     tag_separator: str = ' / ',
+    link_url: str | None = None,
+    wrap_width: int | None = None,
 ) -> str:
   """Like ``_build_highlighted_text`` but each highlighted span carries an
   inline ``<sup>`` tag built from the listed attribute keys joined by
@@ -629,11 +701,15 @@ def _build_highlighted_text_with_tags(
       'border-radius:3px;'
   )
 
+  link_open = _link_open_tag(link_url)
+  depth = 0
+  col = 0
   html_parts: list[str] = []
   cursor = 0
   for point in points:
     if point.position > cursor:
-      html_parts.append(html.escape(text[cursor : point.position]))
+      chunk, col = _wrap_text(text[cursor : point.position], col, wrap_width)
+      html_parts.append(html.escape(chunk))
 
     if point.tag_type == TagType.START:
       colour = color_map.get(point.extraction.extraction_class, '#ffff8d')
@@ -645,7 +721,10 @@ def _build_highlighted_text_with_tags(
           f' title="{html.escape(tag)}"'
           f' style="background-color:{colour};">'
       )
+      if link_open and depth == 0:
+        html_parts.append(link_open)
       html_parts.append(span_html)
+      depth += 1
     else:
       # Emit the <sup> tag for the closing extraction before </span>, so the
       # tag is visually attached to the highlighted text.
@@ -654,11 +733,15 @@ def _build_highlighted_text_with_tags(
           f'<sup class="lx-tag" style="{sup_style}">'
           f'{html.escape(tag)}</sup></span>'
       )
+      depth -= 1
+      if link_open and depth == 0:
+        html_parts.append('</a>')
 
     cursor = point.position
 
   if cursor < len(text):
-    html_parts.append(html.escape(text[cursor:]))
+    chunk, col = _wrap_text(text[cursor:], col, wrap_width)
+    html_parts.append(html.escape(chunk))
   return ''.join(html_parts)
 
 
@@ -670,6 +753,9 @@ def _build_visualization_html_modified_with_tags(
     show_legend: bool = True,
     tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
     tag_separator: str = ' / ',
+    link_url: str | None = None,
+    link_label: str | None = None,
+    wrap_width: int | None = None,
 ) -> str:
   """Same shell as ``_build_visualization_html_modified`` but uses the
   tag-aware highlighter."""
@@ -688,9 +774,11 @@ def _build_visualization_html_modified_with_tags(
   sorted_extractions = sorted(extractions, key=_extraction_sort_key)
 
   highlighted_text = _build_highlighted_text_with_tags(
-      text, sorted_extractions, color_map, tag_attributes, tag_separator
+      text, sorted_extractions, color_map, tag_attributes, tag_separator,
+      link_url, wrap_width,
   )
   legend_html = _build_legend_html(color_map) if show_legend else ''
+  link_footer = _link_footer_html(link_url, link_label)
   highlighted_text = highlighted_text.replace('\n', '<br/>')
 
   html_content = textwrap.dedent(f"""
@@ -701,6 +789,7 @@ def _build_visualization_html_modified_with_tags(
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
+      {link_footer}
     </div>""")
 
   return html_content
@@ -848,6 +937,9 @@ def visualize_modified(
     animation_speed: float = 1.0,
     show_legend: bool = True,
     gif_optimized: bool = True,
+    link_url: str | None = None,
+    link_label: str | None = None,
+    wrap_width: int | None = None,
     **_ignored,
 ) -> HTML | str:
   """Visualises extraction data as animated highlighted HTML.
@@ -859,6 +951,12 @@ def visualize_modified(
       to colours.
     gif_optimized: If ``True``, applies GIF-optimized styling with larger fonts,
       better contrast, and improved dimensions for video capture.
+    link_url: If set, each highlighted finding links to this URL and a labelled
+      link is appended at the bottom of the HTML (for emailed reports).
+    link_label: Visible text for the bottom link; defaults to ``link_url``.
+    wrap_width: If set, soft-wrap the report text near this column. Counting is
+      done on the raw report text only, so injected highlight/sup/link markup
+      neither shifts the column nor gets split.
 
   Returns:
     An :class:`IPython.display.HTML` object if IPython is available, otherwise
@@ -905,6 +1003,9 @@ def visualize_modified(
       color_map,
       animation_speed,
       show_legend,
+      link_url,
+      link_label,
+      wrap_width,
   )
 
   full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
@@ -929,6 +1030,9 @@ def visualize_modified_with_tags(
     gif_optimized: bool = True,
     tag_attributes: tuple[str, ...] = ('location', 'growth_status'),
     tag_separator: str = ' / ',
+    link_url: str | None = None,
+    link_label: str | None = None,
+    wrap_width: int | None = None,
     **_ignored,
 ) -> HTML | str:
   """Like :func:`visualize_modified` but each highlighted span carries an
@@ -946,6 +1050,12 @@ def visualize_modified_with_tags(
     gif_optimized: Apply the GIF-friendly larger-font styling tweak.
     tag_attributes: Attribute keys whose values build the inline tag.
     tag_separator: String used to join the attribute values.
+    link_url: If set, each highlighted finding links to this URL and a labelled
+      link is appended at the bottom of the HTML (for emailed reports).
+    link_label: Visible text for the bottom link; defaults to ``link_url``.
+    wrap_width: If set, soft-wrap the report text near this column. Counting is
+      done on the raw report text only, so the inline ``<sup>`` tags and other
+      injected markup neither shift the column nor get split.
   """
   if isinstance(data_source, (str, pathlib.Path)):
     file_path = pathlib.Path(data_source)
@@ -985,6 +1095,9 @@ def visualize_modified_with_tags(
       show_legend,
       tag_attributes,
       tag_separator,
+      link_url,
+      link_label,
+      wrap_width,
   )
 
   full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
