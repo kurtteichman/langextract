@@ -594,11 +594,11 @@ def _build_visualization_html_modified(
     wrap_width: int | None = None,
 ) -> str:
   """Builds the complete visualization HTML."""
-  if not extractions:
-    return (
-        '<div class="lx-animated-wrapper"><p>No extractions to'
-        ' animate.</p></div>'
-    )
+  # An emailed report with nothing highlighted is still a report, so fall through with an empty
+  # span list instead of returning a stub: the text survives, and so does the LINK — the footer is
+  # built further down, and the stub returned before ever reaching it. Every step below copes with
+  # the empty list: no colours, no legend, the whole text as one unhighlighted chunk.
+  # visualize()'s animated builder keeps its stub — it has a player and nothing to play.
 
   # Sort extractions by position for proper HTML nesting.
   def _extraction_sort_key(extraction):
@@ -618,25 +618,32 @@ def _build_visualization_html_modified(
   )
   legend_html = _build_legend_html(color_map) if show_legend else ''
   link_footer = _link_footer_html(link_url, link_label)
+  # The panel is only a frame for the legend, and it is styled with a background and padding —
+  # empty, it renders as a bare grey bar above the report, which is exactly what a report with
+  # nothing highlighted would get. No legend, no frame.
+  panel_html = (f'<div class="lx-attributes-panel">\n        {legend_html}\n      </div>'
+                if legend_html else '')
 
   js_data = json.dumps(extraction_data)
 
-  # Prepare pos_info_str safely for pytype for the f-string below
-  first_extraction = extractions[0]
-  assert (
-      first_extraction.char_interval
-      and first_extraction.char_interval.start_pos is not None
-      and first_extraction.char_interval.end_pos is not None
-  ), 'first extraction must have valid char_interval with start_pos and end_pos'
-  pos_info_str = f'[{first_extraction.char_interval.start_pos}-{first_extraction.char_interval.end_pos}]'
+  # Prepare pos_info_str safely for pytype for the f-string below.
+  # (pos_info_str and js_data are dead here — this shell has no player to feed them to, unlike
+  # _build_visualization_html. Pre-existing; guarded, not deleted, because extractions[0] would
+  # raise on the empty path above.)
+  if extractions:
+    first_extraction = extractions[0]
+    assert (
+        first_extraction.char_interval
+        and first_extraction.char_interval.start_pos is not None
+        and first_extraction.char_interval.end_pos is not None
+    ), 'first extraction must have valid char_interval with start_pos and end_pos'
+    pos_info_str = f'[{first_extraction.char_interval.start_pos}-{first_extraction.char_interval.end_pos}]'
 
   highlighted_text = highlighted_text.replace('\n', '<br/>')
 
   html_content = textwrap.dedent(f"""
     <div class="lx-animated-wrapper">
-      <div class="lx-attributes-panel">
-        {legend_html}
-      </div>
+      {panel_html}
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
@@ -759,11 +766,11 @@ def _build_visualization_html_modified_with_tags(
 ) -> str:
   """Same shell as ``_build_visualization_html_modified`` but uses the
   tag-aware highlighter."""
-  if not extractions:
-    return (
-        '<div class="lx-animated-wrapper"><p>No extractions to'
-        ' animate.</p></div>'
-    )
+  # An emailed report with nothing highlighted is still a report, so fall through with an empty
+  # span list instead of returning a stub: the text survives, and so does the LINK — the footer is
+  # built further down, and the stub returned before ever reaching it. Every step below copes with
+  # the empty list: no colours, no legend, the whole text as one unhighlighted chunk.
+  # visualize()'s animated builder keeps its stub — it has a player and nothing to play.
 
   def _extraction_sort_key(extraction):
     start = extraction.char_interval.start_pos
@@ -779,13 +786,16 @@ def _build_visualization_html_modified_with_tags(
   )
   legend_html = _build_legend_html(color_map) if show_legend else ''
   link_footer = _link_footer_html(link_url, link_label)
+  # The panel is only a frame for the legend, and it is styled with a background and padding —
+  # empty, it renders as a bare grey bar above the report, which is exactly what a report with
+  # nothing highlighted would get. No legend, no frame.
+  panel_html = (f'<div class="lx-attributes-panel">\n        {legend_html}\n      </div>'
+                if legend_html else '')
   highlighted_text = highlighted_text.replace('\n', '<br/>')
 
   html_content = textwrap.dedent(f"""
     <div class="lx-animated-wrapper">
-      <div class="lx-attributes-panel">
-        {legend_html}
-      </div>
+      {panel_html}
       <div class="lx-text-window" id="textWindow">
         {highlighted_text}
       </div>
@@ -985,16 +995,6 @@ def visualize_modified(
   # Filter valid extractions - show ALL of them
   valid_extractions = _filter_valid_extractions(annotated_doc.extractions)
 
-  if not valid_extractions:
-    empty_html = (
-        '<div class="lx-animated-wrapper"><p>No valid extractions to'
-        ' animate.</p></div>'
-    )
-    full_html = _VISUALIZATION_CSS_MODIFIED + empty_html
-    if HTML is not None and _is_jupyter():
-      return HTML(full_html)
-    return full_html
-
   color_map = _assign_colors(valid_extractions)
 
   visualization_html = _build_visualization_html_modified(
@@ -1074,16 +1074,6 @@ def visualize_modified_with_tags(
     raise ValueError('annotated_doc must contain extractions to visualise.')
 
   valid_extractions = _filter_valid_extractions(annotated_doc.extractions)
-
-  if not valid_extractions:
-    empty_html = (
-        '<div class="lx-animated-wrapper"><p>No valid extractions to'
-        ' animate.</p></div>'
-    )
-    full_html = _VISUALIZATION_CSS_MODIFIED + empty_html
-    if HTML is not None and _is_jupyter():
-      return HTML(full_html)
-    return full_html
 
   color_map = _assign_colors(valid_extractions)
 

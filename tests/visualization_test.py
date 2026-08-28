@@ -155,6 +155,40 @@ class VisualizationTest(absltest.TestCase):
 
     self.assertEqual(actual_html, expected_html)
 
+  @mock.patch.object(visualization, "HTML", new=None)
+  def test_visualize_modified_no_extractions_keeps_the_report_and_the_link(self):
+    """The email builders must not swap the report for a stub.
+
+    They used to return "No valid extractions to animate." *before* the footer was built, so a
+    report the model found nothing in was emailed with no viewer link at all — and the link is
+    the whole point of the emailed render. ``visualize`` keeps its stub; it has a player.
+    """
+    doc = data.AnnotatedDocument(text="FINDINGS: Normal study.", extractions=[])
+
+    for render in (visualization.visualize_modified,
+                   visualization.visualize_modified_with_tags):
+      with self.subTest(render=render.__name__):
+        html = render(doc, link_url="https://viewer/?a=1", link_label="Open the full study")
+
+        self.assertIn("FINDINGS: Normal study.", html)
+        self.assertIn('<div class="lx-email-link"', html)
+        self.assertIn(">Open the full study</a>", html)
+        self.assertNotIn("extractions to animate", html)
+        # No legend to frame, so no empty grey panel above the report. Checked against the
+        # BODY: the class name also appears in the stylesheet that is prepended to every render.
+        self.assertNotIn('<div class="lx-attributes-panel"', html.split("</style>")[1])
+
+  @mock.patch.object(visualization, "HTML", new=None)
+  def test_visualize_modified_no_extractions_and_no_link_is_just_the_report(self):
+    # Nothing to link to (a CU or non-viewer email): the report alone, still not a stub.
+    doc = data.AnnotatedDocument(text="FINDINGS: Normal study.", extractions=[])
+
+    html = visualization.visualize_modified(doc)
+
+    self.assertIn("FINDINGS: Normal study.", html)
+    self.assertNotIn("lx-email-link", html)
+    self.assertNotIn("extractions to animate", html)
+
 
 if __name__ == "__main__":
   absltest.main()
