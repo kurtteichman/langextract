@@ -189,6 +189,40 @@ class VisualizationTest(absltest.TestCase):
     self.assertNotIn("lx-email-link", html)
     self.assertNotIn("extractions to animate", html)
 
+  @mock.patch.object(visualization, "HTML", new=None)
+  def test_show_link_footer_false_keeps_the_highlight_links(self):
+    """The footer and the highlight anchors are separable on purpose.
+
+    A caller whose own template renders the study link needs the footer gone — but not the
+    links on the findings, which are the reason link_url is passed at all. Dropping link_url
+    would take both.
+    """
+    doc = data.AnnotatedDocument(
+        text="Aneurysm here.",
+        extractions=[
+            data.Extraction(
+                extraction_class="finding",
+                extraction_text="Aneurysm",
+                char_interval=data.CharInterval(start_pos=0, end_pos=8),
+            )
+        ],
+    )
+
+    for render in (visualization.visualize_modified,
+                   visualization.visualize_modified_with_tags):
+      with self.subTest(render=render.__name__):
+        kwargs = dict(link_url="https://viewer/?a=1", link_label="Open the full study")
+        with_footer = render(doc, **kwargs)
+        without = render(doc, show_link_footer=False, **kwargs)
+
+        self.assertIn('<div class="lx-email-link"', with_footer)
+        self.assertNotIn('<div class="lx-email-link"', without)
+        self.assertNotIn("Open the full study", without)
+        # The highlight is still a link to the same place in both.
+        self.assertIn('<a href="https://viewer/?a=1"', without)
+        self.assertEqual(with_footer.count('<a href="https://viewer/?a=1"'),
+                         without.count('<a href="https://viewer/?a=1"') + 1)
+
 
 if __name__ == "__main__":
   absltest.main()

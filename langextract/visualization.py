@@ -592,6 +592,7 @@ def _build_visualization_html_modified(
     link_url: str | None = None,
     link_label: str | None = None,
     wrap_width: int | None = None,
+    show_link_footer: bool = True,
 ) -> str:
   """Builds the complete visualization HTML."""
   # An emailed report with nothing highlighted is still a report, so fall through with an empty
@@ -617,7 +618,7 @@ def _build_visualization_html_modified(
       text, sorted_extractions, color_map
   )
   legend_html = _build_legend_html(color_map) if show_legend else ''
-  link_footer = _link_footer_html(link_url, link_label)
+  link_footer = _link_footer_html(link_url, link_label) if show_link_footer else ''
   # The panel is only a frame for the legend, and it is styled with a background and padding —
   # empty, it renders as a bare grey bar above the report, which is exactly what a report with
   # nothing highlighted would get. No legend, no frame.
@@ -763,6 +764,7 @@ def _build_visualization_html_modified_with_tags(
     link_url: str | None = None,
     link_label: str | None = None,
     wrap_width: int | None = None,
+    show_link_footer: bool = True,
 ) -> str:
   """Same shell as ``_build_visualization_html_modified`` but uses the
   tag-aware highlighter."""
@@ -785,7 +787,7 @@ def _build_visualization_html_modified_with_tags(
       link_url, wrap_width,
   )
   legend_html = _build_legend_html(color_map) if show_legend else ''
-  link_footer = _link_footer_html(link_url, link_label)
+  link_footer = _link_footer_html(link_url, link_label) if show_link_footer else ''
   # The panel is only a frame for the legend, and it is styled with a background and padding —
   # empty, it renders as a bare grey bar above the report, which is exactly what a report with
   # nothing highlighted would get. No legend, no frame.
@@ -950,6 +952,7 @@ def visualize_modified(
     link_url: str | None = None,
     link_label: str | None = None,
     wrap_width: int | None = None,
+    show_link_footer: bool = True,
     **_ignored,
 ) -> HTML | str:
   """Visualises extraction data as animated highlighted HTML.
@@ -967,6 +970,10 @@ def visualize_modified(
     wrap_width: If set, soft-wrap the report text near this column. Counting is
       done on the raw report text only, so injected highlight/sup/link markup
       neither shifts the column nor gets split.
+    show_link_footer: If ``False``, the labelled link at the bottom is omitted while
+      ``link_url`` still wraps each highlight. For a caller that places the link
+      itself (an email template with its own "study link" section) and would
+      otherwise show the reader the same link twice.
 
   Returns:
     An :class:`IPython.display.HTML` object if IPython is available, otherwise
@@ -1006,6 +1013,7 @@ def visualize_modified(
       link_url,
       link_label,
       wrap_width,
+      show_link_footer,
   )
 
   full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
@@ -1033,6 +1041,7 @@ def visualize_modified_with_tags(
     link_url: str | None = None,
     link_label: str | None = None,
     wrap_width: int | None = None,
+    show_link_footer: bool = True,
     **_ignored,
 ) -> HTML | str:
   """Like :func:`visualize_modified` but each highlighted span carries an
@@ -1056,6 +1065,10 @@ def visualize_modified_with_tags(
     wrap_width: If set, soft-wrap the report text near this column. Counting is
       done on the raw report text only, so the inline ``<sup>`` tags and other
       injected markup neither shift the column nor get split.
+    show_link_footer: If ``False``, the labelled link at the bottom is omitted while
+      ``link_url`` still wraps each highlight. For a caller that places the link
+      itself (an email template with its own "study link" section) and would
+      otherwise show the reader the same link twice.
   """
   if isinstance(data_source, (str, pathlib.Path)):
     file_path = pathlib.Path(data_source)
@@ -1088,6 +1101,7 @@ def visualize_modified_with_tags(
       link_url,
       link_label,
       wrap_width,
+      show_link_footer,
   )
 
   full_html = _VISUALIZATION_CSS_MODIFIED + visualization_html
